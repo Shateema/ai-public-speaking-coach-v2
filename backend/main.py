@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File
 import os
 import uuid
 import shutil
-
+from fastapi.middleware.cors import CORSMiddleware
 # ✅ AUDIO IMPORTS
 from backend.analysis.audio import (
     extract_audio,
@@ -21,6 +21,15 @@ from backend.analysis.feedback import (
 )
 
 app = FastAPI(title="AI Speaking Coach v2")
+
+# === CORS ===
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 # === DIRECTORIES ===
 UPLOAD_DIR = "backend/uploads"
