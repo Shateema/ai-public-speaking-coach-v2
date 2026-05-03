@@ -3,12 +3,15 @@ import os
 import uuid
 import shutil
 
-# ✅ IMPORT AUDIO PIPELINE
+# ✅ AUDIO IMPORTS
 from backend.analysis.audio import (
     extract_audio,
     transcribe_audio,
     analyze_speech
 )
+
+# ✅ VISUAL IMPORT
+from backend.analysis.visual import analyze_gaze
 
 app = FastAPI(title="AI Speaking Coach v2")
 
@@ -46,14 +49,23 @@ async def upload_video(file: UploadFile = File(...)):
         speech_metrics = analyze_speech(transcript, duration)
         print("📊 Speech analysis done")
 
-        # --- RESPONSE ---
+        # --- VISUAL PIPELINE ---
+        visual_metrics = analyze_gaze(file_path)
+        print("👀 Gaze analysis done")
+
+        # --- COMBINE ---
+        metrics = {
+            **speech_metrics,
+            **visual_metrics
+        }
+
         return {
             "status": "success",
             "video_id": video_id,
             "filename": file.filename,
             "transcript": transcript,
             "duration": duration,
-            "metrics": speech_metrics
+            "metrics": metrics
         }
 
     except Exception as e:
