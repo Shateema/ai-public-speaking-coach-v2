@@ -13,6 +13,13 @@ from backend.analysis.audio import (
 # ✅ VISUAL IMPORT
 from backend.analysis.visual import analyze_gaze
 
+# ✅ FEEDBACK IMPORT
+from backend.analysis.feedback import (
+    score_speaking,
+    score_gaze,
+    generate_feedback
+)
+
 app = FastAPI(title="AI Speaking Coach v2")
 
 # === DIRECTORIES ===
@@ -53,19 +60,44 @@ async def upload_video(file: UploadFile = File(...)):
         visual_metrics = analyze_gaze(file_path)
         print("👀 Gaze analysis done")
 
-        # --- COMBINE ---
+        # --- COMBINE METRICS ---
         metrics = {
             **speech_metrics,
             **visual_metrics
         }
 
+        # --- SCORING ---
+        speaking_score = score_speaking(
+            metrics["wpm"],
+            metrics["filler_count"]
+        )
+
+        gaze_score = score_gaze(
+            metrics["camera_facing_percentage"]
+        )
+
+        overall_score = round(
+            speaking_score * 0.6 + gaze_score * 0.4,
+            2
+        )
+
+        # --- FEEDBACK ---
+        feedback = generate_feedback(metrics)
+
+        # --- RESPONSE ---
         return {
             "status": "success",
             "video_id": video_id,
             "filename": file.filename,
             "transcript": transcript,
             "duration": duration,
-            "metrics": metrics
+            "metrics": metrics,
+            "scores": {
+                "speaking_score": speaking_score,
+                "gaze_score": gaze_score,
+                "overall_score": overall_score
+            },
+            "feedback": feedback
         }
 
     except Exception as e:
