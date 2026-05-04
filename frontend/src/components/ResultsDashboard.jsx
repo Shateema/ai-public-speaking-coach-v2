@@ -2,6 +2,41 @@ import { useState } from "react";
 import ScoreRing from "./ScoreRing";
 import styles from "./ResultsDashboard.module.css";
 
+/**
+ * Parses ai_feedback.details (a plain string) into an array of lines
+ * so the existing bullet-list UI can render each point separately.
+ * Handles:  "• line\n• line", "- line\n- line", "1. line\n2. line", plain text.
+ */
+function parseFeedback(text) {
+  if (!text || typeof text !== "string") return [];
+  const lines = text
+    .split("\n")
+    .map((l) => l.replace(/^[\s•\-*\d.]+/, "").trim())
+    .filter(Boolean);
+  return lines.length > 0 ? lines : [text.trim()];
+}
+
+/** Interpretation helpers — turn raw numbers into plain-English verdicts */
+function getWPMMessage(wpm) {
+  if (wpm === 0)    return "No speech detected";
+  if (wpm < 110)   return "Too slow — add more energy and pace";
+  if (wpm <= 160)  return "Good pace — right in the sweet spot";
+  return "Too fast — slow down for clarity";
+}
+
+function getFillerMessage(count) {
+  if (count === 0)  return "Excellent — zero filler words";
+  if (count <= 3)   return "Minimal fillers — minor polish needed";
+  if (count <= 7)   return "Noticeable fillers — practice deliberate pausing";
+  return "Too many fillers — needs focused practice";
+}
+
+function getEyeContactMessage(pct) {
+  if (pct >= 70)  return "Strong eye contact — very engaging";
+  if (pct >= 40)  return "Decent — aim to look at the camera more";
+  return "Low eye contact — connect more with your audience";
+}
+
 export default function ResultsDashboard({ result }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -16,24 +51,33 @@ export default function ResultsDashboard({ result }) {
     );
   }
 
-  const { scores, feedback, transcript, wpm, filler_count, gaze_percentage } = result;
+  // Log full API response for debugging
+  console.log("[SpeakCoach] API response:", result);
+
+  // ── Correct nested field access ──────────────────────────────
+  const { scores, metrics = {}, transcript, ai_feedback = {} } = result;
+
   const overall  = Math.round(scores?.overall_score  ?? 0);
   const speaking = Math.round(scores?.speaking_score ?? 0);
   const gaze     = Math.round(scores?.gaze_score     ?? 0);
 
+  // metrics lives under result.metrics (not top-level)
+  const wpmValue = metrics.wpm        ?? 0;
+  const fillers  = metrics.filler_count ?? 0;
+  // camera_facing_percentage is already 0-100 (not a 0-1 ratio)
+  const gazePct  = metrics.camera_facing_percentage ?? gaze;
+
+  // ai_feedback.details is a string — split into bullet lines for the list UI
+  const feedbackLines = parseFeedback(ai_feedback.details);
+
   // WPM bar: ideal 120-160, cap at 200
-  const wpmValue    = wpm ?? 0;
   const wpmBarPct   = Math.min((wpmValue / 200) * 100, 100);
   const wpmIdeal    = wpmValue >= 120 && wpmValue <= 160;
   const wpmBarColor = wpmIdeal ? "var(--success)" : wpmValue < 100 || wpmValue > 180 ? "var(--error)" : "#F0B800";
 
   // Filler bar: 0 is perfect, 10+ is red
-  const fillers      = filler_count ?? 0;
   const fillerBarPct = Math.max(0, 100 - (fillers / 10) * 100);
   const fillerColor  = fillers === 0 ? "var(--success)" : fillers <= 3 ? "#F0B800" : "var(--error)";
-
-  // Gaze %
-  const gazePct = gaze_percentage != null ? Math.round(gaze_percentage * 100) : gaze;
 
   return (
     <div className={styles.dashboard}>
@@ -54,16 +98,28 @@ export default function ResultsDashboard({ result }) {
             <span className={styles.sectionIcon}><CoachIcon /></span>
             <span className={styles.sectionTitle}>Coach Feedback</span>
           </div>
-          <ul className={styles.feedbackList}>
-            {(feedback ?? []).map((f, i) => (
-              <li key={i} className={styles.feedbackItem}>
-                <span className={styles.feedbackBullet}>
-                  <span className={styles.feedbackBulletNum}>{i + 1}</span>
-                </span>
-                <p className={styles.feedbackText}>{f}</p>
-              </li>
-            ))}
-          </ul>
+
+          {/* AI summary sentence */}
+          {ai_feedback.summary && (
+            <p className={styles.feedbackSummary}>{ai_feedback.summary}</p>
+          )}
+
+          {feedbackLines.length > 0 ? (
+            <ul className={styles.feedbackList}>
+              {feedbackLines.map((f, i) => (
+                <li key={i} className={styles.feedbackItem}>
+                  <span className={styles.feedbackBullet}>
+                    <span className={styles.feedbackBulletNum}>{i + 1}</span>
+                  </span>
+                  <p className={styles.feedbackText}>{f}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.feedbackText} style={{ color: "var(--text-muted)", padding: "0.5rem 0" }}>
+              No detailed feedback available.
+            </p>
+          )}
         </div>
 
         {/* Metrics */}
@@ -86,7 +142,7 @@ export default function ResultsDashboard({ result }) {
               <div className={styles.metricBar}>
                 <div className={styles.metricFill} style={{ width: `${wpmBarPct}%`, background: wpmBarColor }} />
               </div>
-              <span className={styles.metricNote}>Ideal: 120–160 WPM</span>
+              <span className={styles.metricNote}>{getWPMMessage(wpmValue)}</span>
             </div>
 
             {/* Filler words */}
@@ -101,7 +157,7 @@ export default function ResultsDashboard({ result }) {
               <div className={styles.metricBar}>
                 <div className={styles.metricFill} style={{ width: `${fillerBarPct}%`, background: fillerColor }} />
               </div>
-              <span className={styles.metricNote}>um · uh · like · you know — less is more</span>
+              <span className={styles.metricNote}>{getFillerMessage(fillers)}</span>
             </div>
 
             {/* Gaze */}
@@ -116,7 +172,7 @@ export default function ResultsDashboard({ result }) {
               <div className={styles.metricBar}>
                 <div className={styles.metricFill} style={{ width: `${gazePct}%`, background: gazePct >= 70 ? "var(--success)" : gazePct >= 40 ? "#F0B800" : "var(--error)" }} />
               </div>
-              <span className={styles.metricNote}>Time looking at the camera</span>
+              <span className={styles.metricNote}>{getEyeContactMessage(gazePct)}</span>
             </div>
 
           </div>

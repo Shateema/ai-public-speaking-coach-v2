@@ -67,6 +67,18 @@
   border-color: var(--border-bright);
 }
 
+/* ─── Feedback Summary ───────────────────────────────────────── */
+.feedbackSummary {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  padding: 0.625rem 0.75rem;
+  background: var(--bg-raised);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: 0.875rem;
+}
+
 /* ─── Feedback List ──────────────────────────────────────────── */
 .feedbackList {
   list-style: none;
