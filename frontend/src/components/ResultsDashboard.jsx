@@ -3,17 +3,18 @@ import ScoreRing from "./ScoreRing";
 import styles from "./ResultsDashboard.module.css";
 
 /**
- * Parses ai_feedback.details (a plain string) into an array of lines
- * so the existing bullet-list UI can render each point separately.
- * Handles:  "• line\n• line", "- line\n- line", "1. line\n2. line", plain text.
+ * Normalizes ai_feedback.details into an array of bullet points.
+ * The backend now sends an array, but this still tolerates the older
+ * plain-string shape ("• line\n• line", "1. line", plain text).
  */
-function parseFeedback(text) {
-  if (!text || typeof text !== "string") return [];
-  const lines = text
+function parseFeedback(details) {
+  if (Array.isArray(details)) return details.filter(Boolean);
+  if (!details || typeof details !== "string") return [];
+  const lines = details
     .split("\n")
     .map((l) => l.replace(/^[\s•\-*\d.]+/, "").trim())
     .filter(Boolean);
-  return lines.length > 0 ? lines : [text.trim()];
+  return lines.length > 0 ? lines : [details.trim()];
 }
 
 /** Interpretation helpers — turn raw numbers into plain-English verdicts */
@@ -67,8 +68,8 @@ export default function ResultsDashboard({ result }) {
   // camera_facing_percentage is already 0-100 (not a 0-1 ratio)
   const gazePct  = metrics.camera_facing_percentage ?? gaze;
 
-  // ai_feedback.details is a string — split into bullet lines for the list UI
   const feedbackLines = parseFeedback(ai_feedback.details);
+  const isRuleBased   = ai_feedback.source === "rule-based";
 
   // WPM bar: ideal 120-160, cap at 200
   const wpmBarPct   = Math.min((wpmValue / 200) * 100, 100);
@@ -102,6 +103,12 @@ export default function ResultsDashboard({ result }) {
           {/* AI summary sentence */}
           {ai_feedback.summary && (
             <p className={styles.feedbackSummary}>{ai_feedback.summary}</p>
+          )}
+
+          {isRuleBased && (
+            <p className={styles.fallbackNote}>
+              Basic feedback — add a Groq API key for AI coaching.
+            </p>
           )}
 
           {feedbackLines.length > 0 ? (

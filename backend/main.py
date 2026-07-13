@@ -2,6 +2,8 @@ from fastapi import FastAPI, UploadFile, File
 import os
 import uuid
 import shutil
+import logging
+from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 
 # ✅ AUDIO IMPORTS
@@ -21,14 +23,27 @@ from backend.analysis.feedback import (
 )
 
 # ✅ AI SERVICE
-from backend.services.ai_client import get_ai_feedback
+from backend.services import ai_client
+
+load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Speaking Coach v2")
 
 # === CORS ===
+# Comma-separated list so the deployed frontend origin can be added without a
+# code change: CORS_ORIGINS=https://myapp.vercel.app
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -44,8 +59,37 @@ def home():
     return {"message": "Backend is running clean ✅"}
 
 
+@app.get("/health")
+def health():
+    """Tells you at a glance whether the AI key is actually loaded."""
+    return {
+        "status": "ok",
+        "ai_provider": "groq",
+        "ai_configured": ai_client.is_configured(),
+        "model": ai_client.MODEL,
+    }
+
+
+@app.get("/debug/models")
+def debug_models():
+    """Enumerates models available to the current Groq key."""
+    try:
+        models = ai_client.list_models()
+        return {"count": len(models), "models": models}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.post("/upload")
-async def upload_video(file: UploadFile = File(...)):
+def upload_video(file: UploadFile = File(...)):
+    # Deliberately sync (`def`, not `async def`): every step below — ffmpeg,
+    # Whisper, MediaPipe, the Groq call — is blocking and CPU-bound. As `async def`
+    # it ran on the event loop and starved everything else, including the socket
+    # under the Groq SDK, which then timed out. `def` makes FastAPI run it in a
+    # threadpool instead, so the loop stays free to serve other requests.
+    file_path = None
+    audio_path = None
+
     try:
         # --- Generate ID ---
         video_id = str(uuid.uuid4())
@@ -59,21 +103,21 @@ async def upload_video(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        print("✅ Video saved")
+        logger.info("✅ Video saved")
 
         # --- AUDIO PIPELINE ---
         audio_path = extract_audio(file_path)
-        print("🎧 Audio extracted")
+        logger.info("🎧 Audio extracted")
 
         transcript, duration = transcribe_audio(audio_path)
-        print("📝 Transcription complete")
+        logger.info("📝 Transcription complete")
 
         speech_metrics = analyze_speech(transcript, duration)
-        print("📊 Speech analysis done")
+        logger.info("📊 Speech analysis done")
 
         # --- VISUAL PIPELINE ---
         visual_metrics = analyze_gaze(file_path)
-        print("👀 Gaze analysis done")
+        logger.info("👀 Gaze analysis done")
 
         # --- COMBINE METRICS ---
         metrics = {
@@ -95,8 +139,8 @@ async def upload_video(file: UploadFile = File(...)):
             2
         )
 
-        # --- AI FEEDBACK ---
-        feedback = get_ai_feedback(metrics)
+        # --- AI FEEDBACK (falls back to rule-based coach if Groq is down) ---
+        feedback = ai_client.get_ai_feedback(metrics)
 
         # --- RESPONSE ---
         return {
@@ -113,13 +157,24 @@ async def upload_video(file: UploadFile = File(...)):
             },
             "ai_feedback": {
                 "summary": "Here’s a quick evaluation of your speaking performance.",
-                "details": feedback
+                "source": feedback["source"],
+                "details": feedback["points"]
             }
         }
 
     except Exception as e:
-        print("❌ ERROR:", str(e))
+        logger.exception("❌ Upload failed")
         return {
             "status": "error",
             "message": str(e)
         }
+
+    finally:
+        # Don't leak the video and extracted .wav — on a container the disk is
+        # ephemeral and small, and we have no reason to keep them after analysis.
+        for path in (file_path, audio_path):
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError as e:
+                    logger.warning("Could not remove %s: %s", path, e)

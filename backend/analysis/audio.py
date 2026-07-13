@@ -1,3 +1,4 @@
+import os
 import subprocess
 from faster_whisper import WhisperModel
 
@@ -6,10 +7,13 @@ model = WhisperModel("base", compute_type="int8")
 
 
 def extract_audio(video_path):
-    audio_path = video_path.replace(".mp4", ".wav")
+    # splitext, not .replace(".mp4", ...) — the uploader accepts MOV/AVI/WEBM too,
+    # and for those a naive replace would leave audio_path == video_path.
+    audio_path = os.path.splitext(video_path)[0] + ".wav"
 
     command = [
         "ffmpeg",
+        "-y",
         "-i", video_path,
         "-vn",
         "-acodec", "pcm_s16le",
@@ -18,7 +22,13 @@ def extract_audio(video_path):
         audio_path
     ]
 
-    subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    if result.returncode != 0 or not os.path.exists(audio_path):
+        raise RuntimeError(
+            f"ffmpeg failed to extract audio (exit {result.returncode}). "
+            f"Is ffmpeg installed and on PATH?\n{result.stderr[-500:]}"
+        )
 
     return audio_path
 

@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import styles from "./VideoUpload.module.css";
 
+const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+
 export default function VideoUpload({ onResult }) {
   const [file, setFile]       = useState(null);
   const [loading, setLoading] = useState(false);
@@ -36,7 +38,7 @@ export default function VideoUpload({ onResult }) {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const res  = await fetch("http://127.0.0.1:8000/upload", { method: "POST", body: formData });
+      const res  = await fetch(`${API_URL}/upload`, { method: "POST", body: formData });
       const data = await res.json();
       onResult(data);
     } catch (err) {

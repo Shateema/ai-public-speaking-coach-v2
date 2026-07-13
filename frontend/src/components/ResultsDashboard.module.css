@@ -79,6 +79,17 @@
   margin-bottom: 0.875rem;
 }
 
+.fallbackNote {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-raised);
+  border-left: 2px solid #F0B800;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: 0.875rem;
+}
+
 /* ─── Feedback List ──────────────────────────────────────────── */
 .feedbackList {
   list-style: none;
