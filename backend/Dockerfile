@@ -1,12 +1,15 @@
 # Build context is the repo root:  docker build -f backend/Dockerfile .
 FROM python:3.11-slim
 
-# ffmpeg is required by backend/analysis/audio.py to strip audio from the video.
-# libgl/libglib are needed by opencv/mediapipe even in the headless build.
+# ffmpeg    — backend/analysis/audio.py shells out to it to strip the audio track.
+# libgl1    — opencv-contrib-python (mediapipe's required opencv) links against libGL.
+# libportaudio2 — `import mediapipe` transitively imports sounddevice, which fails
+#                 at import time without PortAudio. Omit it and the app won't boot.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
         libgl1 \
         libglib2.0-0 \
+        libportaudio2 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

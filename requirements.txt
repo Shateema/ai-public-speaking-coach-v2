@@ -10,7 +10,9 @@ groq==1.4.0
 # Audio: transcription (also requires ffmpeg on PATH)
 faster-whisper==1.2.1
 
-# Visual: gaze / eye-contact detection
-# headless build: no X11/GUI libs, which we never use and which bloat the image
-opencv-python-headless==4.13.0.92
+# Visual: gaze / eye-contact detection.
+# mediapipe hard-requires opencv-contrib-python and numpy<2, so don't swap in
+# opencv-python-headless — its recent builds want numpy>=2 and the resolve fails.
 mediapipe==0.10.21
+opencv-contrib-python==4.11.0.86
+numpy==1.26.4

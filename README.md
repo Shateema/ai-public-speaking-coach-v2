@@ -6,23 +6,49 @@ An end-to-end AI-powered speaking coach that analyzes video recordings and deliv
 
 ## Quick start
 
+Requires **Python 3.11+**, **Node 18+**, and **ffmpeg on PATH**.
+
 ```bash
 git clone <repo-url>
 cd ai-public-speaking-coach-v2
 
 cp .env.example .env          # then paste your Groq key into .env
-docker compose up
+```
+
+**Terminal 1 — backend:**
+```bash
+python -m venv venv
+venv\Scripts\activate           # Windows
+# source venv/bin/activate      # macOS/Linux
+pip install -r requirements.txt
+uvicorn backend.main:app --reload
+```
+
+**Terminal 2 — frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 - Frontend → http://localhost:5173
 - Backend → http://127.0.0.1:8000
 - Is the AI key loaded? → http://127.0.0.1:8000/health
 
-That's it — Docker brings its own Python, ffmpeg, and Node.
-
 > **No API key?** The app still runs. It falls back to a rule-based coach and the
 > UI labels the result "Basic feedback". Get a free key at
 > [console.groq.com/keys](https://console.groq.com/keys) for real AI coaching.
+
+### Or with Docker
+
+If you have Docker, this replaces everything above — no venv, no ffmpeg install:
+
+```bash
+cp .env.example .env
+docker compose up
+```
+
+Same URLs. The first build takes a few minutes (it bakes in the Whisper model).
 
 ---
 
@@ -88,26 +114,6 @@ Frontend — `frontend/.env` (see [`frontend/.env.example`](frontend/.env.exampl
 | `VITE_API_URL` | `http://127.0.0.1:8000` | Backend base URL. |
 
 Neither `.env` is committed.
-
----
-
-## Running without Docker
-
-Requires **Python 3.11+**, **Node 18+**, and **ffmpeg on PATH**.
-
-```bash
-# Backend (terminal 1, from repo root)
-python -m venv venv
-venv\Scripts\activate           # Windows
-# source venv/bin/activate      # macOS/Linux
-pip install -r requirements.txt
-uvicorn backend.main:app --reload
-
-# Frontend (terminal 2)
-cd frontend
-npm install
-npm run dev
-```
 
 ---
 
