@@ -1,6 +1,19 @@
+---
+title: AI Speaking Coach
+emoji: 🎤
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 🎤 AI Speaking Coach v2
 
 An end-to-end AI-powered speaking coach that analyzes video recordings and delivers feedback on speech pace, filler words, and eye contact — powered by Groq (Llama 3.3), faster-whisper, and MediaPipe.
+
+> The YAML block above configures the Hugging Face Space. It's ignored by GitHub
+> and by everything else — leave it in place.
 
 ---
 
@@ -181,26 +194,40 @@ Lists every model your Groq key can reach.
 
 ---
 
-## Deployment
+## Deployment (free)
 
-Backend → **Render** (Docker). Frontend → **Vercel** (static).
+Backend → **Hugging Face Spaces** (Docker). Frontend → **Vercel** (static).
+Both are free tiers, no credit card.
 
-### Backend on Render
+Whisper + MediaPipe need ~1.5GB RAM, which rules out most free hosts (Render's
+free tier caps at 512MB and OOMs on the first upload). A free HF Space gets
+2 vCPU and 16GB, so it fits comfortably.
 
-1. Push to GitHub, then in Render: **New → Blueprint**, point at this repo.
-   [`render.yaml`](render.yaml) is picked up automatically.
-2. Set `GROQ_API_KEY` in the Render dashboard (it is deliberately not in the repo).
-3. Set `CORS_ORIGINS` to your Vercel URL, e.g. `https://your-app.vercel.app`.
+### 1. Backend → Hugging Face Space
 
-> ⚠️ **The free 512MB instance will not work.** Whisper and MediaPipe together
-> need ~1.5GB and the container OOMs on the first upload. `render.yaml` requests
-> the Standard plan.
+1. Create a Space at [huggingface.co/new-space](https://huggingface.co/new-space):
+   **SDK = Docker**, template **Blank**, hardware **CPU basic (free)**.
+2. Push this repo to the Space (it's a git remote):
+   ```bash
+   git remote add space https://huggingface.co/spaces/<user>/<space-name>
+   git push space main
+   ```
+3. In the Space → **Settings → Variables and secrets**, add:
+   - Secret `GROQ_API_KEY` = your Groq key
+   - Variable `CORS_ORIGINS` = your Vercel URL (set after step 2 below)
+4. Wait for the build, then check `https://<user>-<space-name>.hf.space/health`.
+   `ai_configured: true` means the image booted and the key loaded.
 
-### Frontend on Vercel
+The root [`Dockerfile`](Dockerfile) already targets port 7860 and runs as UID 1000,
+which is what Spaces requires. Free Spaces sleep after 48h idle and wake on the
+next request.
 
-1. **New Project** → import the repo → set **Root Directory** to `frontend`.
-2. Add env var `VITE_API_URL` = your Render URL (e.g. `https://speakcoach-api.onrender.com`).
-3. Deploy. [`frontend/vercel.json`](frontend/vercel.json) handles the Vite build config.
+### 2. Frontend → Vercel
+
+1. **New Project** → import this repo → set **Root Directory** to `frontend`.
+2. Add env var `VITE_API_URL` = your Space URL (`https://<user>-<space-name>.hf.space`).
+3. Deploy, then go back and set `CORS_ORIGINS` on the Space to your Vercel URL —
+   without it the browser blocks every upload.
 
 ---
 
@@ -209,7 +236,6 @@ Backend → **Render** (Docker). Frontend → **Vercel** (static).
 ```
 ai-public-speaking-coach-v2/
 ├── backend/
-│   ├── Dockerfile
 │   ├── main.py                  # FastAPI app: /upload, /health, /debug/models
 │   ├── analysis/
 │   │   ├── audio.py             # ffmpeg extraction, Whisper transcription, WPM/fillers
@@ -223,7 +249,7 @@ ai-public-speaking-coach-v2/
 │       ├── ResultsDashboard.jsx # Results layout
 │       └── ScoreRing.jsx        # Animated SVG score ring
 ├── docker-compose.yml           # One-command local dev
-├── render.yaml                  # Backend deploy blueprint
+├── Dockerfile                   # Backend image (compose + HF Spaces)
 └── requirements.txt
 ```
 
